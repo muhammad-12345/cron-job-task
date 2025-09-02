@@ -6,17 +6,35 @@ export class CronService {
   private jobs: Map<string, cron.ScheduledTask> = new Map();
 
   startCronJobs(): void {
-    // Process pending installments daily at 9 AM
+    console.log('🔄 Starting cron jobs...');
+    
+    // Process pending installments daily at 9 AM UTC
     this.scheduleJob('process-installments', '0 9 * * *', () => {
+      console.log('⏰ Daily installment processing job triggered');
       this.processPendingInstallments();
     });
 
-    // Clean up old failed payments weekly on Sunday at 2 AM
+    // Clean up old failed payments weekly on Sunday at 2 AM UTC
     this.scheduleJob('cleanup-failed-payments', '0 2 * * 0', () => {
+      console.log('⏰ Weekly cleanup job triggered');
       this.cleanupFailedPayments();
     });
 
+    // Test job - process installments every 5 minutes (for development)
+    if (process.env.NODE_ENV === 'development') {
+      this.scheduleJob('test-process-installments', '*/5 * * * *', () => {
+        console.log('🧪 Test installment processing job triggered (dev mode)');
+        this.processPendingInstallments();
+      });
+    }
+
     console.log('✅ Cron jobs scheduled successfully');
+    console.log('📅 Scheduled jobs:');
+    console.log('   - Daily installment processing: 9:00 AM UTC');
+    console.log('   - Weekly cleanup: Sunday 2:00 AM UTC');
+    if (process.env.NODE_ENV === 'development') {
+      console.log('   - Test processing: Every 5 minutes (dev mode)');
+    }
   }
 
   private scheduleJob(name: string, schedule: string, task: () => void): void {
@@ -31,9 +49,10 @@ export class CronService {
   }
 
   private async processPendingInstallments(): Promise<void> {
+    const startTime = new Date();
+    console.log('🔄 Processing pending installments...', { startTime: startTime.toISOString() });
+    
     try {
-      console.log('🔄 Processing pending installments...');
-      
       const pendingInstallments = await databaseService.getPendingInstallments();
       
       if (pendingInstallments.length === 0) {
@@ -42,32 +61,64 @@ export class CronService {
       }
 
       console.log(`📊 Found ${pendingInstallments.length} pending installments`);
+      
+      let successCount = 0;
+      let failureCount = 0;
+      const errors: string[] = [];
 
       for (const installment of pendingInstallments) {
-        await this.processInstallment(installment);
+        try {
+          const result = await this.processInstallment(installment);
+          if (result.success) {
+            successCount++;
+          } else {
+            failureCount++;
+            errors.push(`Installment ${installment.id}: ${result.error}`);
+          }
+        } catch (error) {
+          failureCount++;
+          const errorMsg = `Installment ${installment.id}: ${error instanceof Error ? error.message : 'Unknown error'}`;
+          errors.push(errorMsg);
+          console.error('❌ Error processing installment:', errorMsg);
+        }
       }
 
-      console.log('✅ Finished processing pending installments');
+      const endTime = new Date();
+      const duration = endTime.getTime() - startTime.getTime();
+      
+      console.log('✅ Finished processing pending installments', {
+        total: pendingInstallments.length,
+        successful: successCount,
+        failed: failureCount,
+        duration: `${duration}ms`,
+        endTime: endTime.toISOString()
+      });
+
+      if (errors.length > 0) {
+        console.error('❌ Processing errors:', errors);
+      }
+
     } catch (error) {
-      console.error('❌ Error processing pending installments:', error);
+      console.error('❌ Critical error processing pending installments:', error);
     }
   }
 
-  private async processInstallment(installment: any): Promise<void> {
+  private async processInstallment(installment: any): Promise<{ success: boolean; error?: string }> {
     try {
       console.log(`💳 Processing installment ${installment.installmentNumber} for payment ${installment.paymentId}`);
 
       // Get payment details to get customer info
       const payment = await databaseService.getPaymentById(installment.paymentId);
       if (!payment) {
-        console.error(`❌ Payment not found: ${installment.paymentId}`);
-        return;
+        const error = `Payment not found: ${installment.paymentId}`;
+        console.error(`❌ ${error}`);
+        return { success: false, error };
       }
 
       // Update installment status to processing
       await databaseService.updateInstallmentStatus(installment.id, 'processing');
 
-      // Process payment with external API
+      // Process payment with GreenPay API
       const paymentResult = await externalPaymentService.processPayment({
         amount: installment.amount,
         customerInfo: {
@@ -86,7 +137,10 @@ export class CronService {
           paymentResult.transactionId
         );
         
-        console.log(`✅ Installment ${installment.installmentNumber} processed successfully`);
+        console.log(`✅ Installment ${installment.installmentNumber} processed successfully via GreenPay`, {
+          transactionId: paymentResult.transactionId,
+          amount: installment.amount
+        });
         
         // Check if this was the last installment
         const allInstallments = await databaseService.getInstallmentsByPaymentId(installment.paymentId);
@@ -94,15 +148,21 @@ export class CronService {
         
         if (paidInstallments.length === allInstallments.length) {
           console.log(`🎉 All installments completed for payment ${installment.paymentId}`);
-          // You could update the main payment status here if needed
+          // Update the main payment status to completed
+          await databaseService.updatePaymentStatus(installment.paymentId, 'completed');
         }
+        
+        return { success: true };
       } else {
         // Update installment status to failed
         await databaseService.updateInstallmentStatus(installment.id, 'failed');
-        console.error(`❌ Installment ${installment.installmentNumber} failed: ${paymentResult.message}`);
+        const error = `GreenPay payment failed: ${paymentResult.message}`;
+        console.error(`❌ Installment ${installment.installmentNumber} failed: ${error}`);
+        return { success: false, error };
       }
     } catch (error) {
-      console.error(`❌ Error processing installment ${installment.id}:`, error);
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      console.error(`❌ Error processing installment ${installment.id}:`, errorMsg);
       
       // Update installment status to failed
       try {
@@ -110,6 +170,8 @@ export class CronService {
       } catch (updateError) {
         console.error('❌ Failed to update installment status:', updateError);
       }
+      
+      return { success: false, error: errorMsg };
     }
   }
 

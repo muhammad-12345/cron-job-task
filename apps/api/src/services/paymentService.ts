@@ -42,7 +42,7 @@ export class PaymentService {
 
     if (paymentResult.success) {
       // Update payment status to completed
-      // Note: In a real implementation, you'd update the database here
+      await databaseService.updatePaymentStatus(paymentId, 'completed');
       return {
         success: true,
         paymentId,
@@ -52,6 +52,8 @@ export class PaymentService {
         }
       };
     } else {
+      // Update payment status to failed
+      await databaseService.updatePaymentStatus(paymentId, 'failed');
       throw new Error(paymentResult.message || 'Payment failed');
     }
   }

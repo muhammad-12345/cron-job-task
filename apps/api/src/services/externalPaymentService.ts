@@ -12,113 +12,55 @@ interface PaymentRequest {
 
 export class ExternalPaymentService {
   private apiUrl: string;
-  private apiKey: string;
+  private clientId: string;
+  private apiPassword: string;
 
   constructor() {
-    this.apiUrl = process.env.PAYMENT_API_URL || 'https://api.payment-provider.com';
-    this.apiKey = process.env.PAYMENT_API_KEY || 'your-api-key-here';
+    this.apiUrl = process.env.GREENPAY_API_URL || 'https://api.greenpay.com';
+    this.clientId = process.env.GREENPAY_CLIENT_ID || '';
+    this.apiPassword = process.env.GREENPAY_API_PASSWORD || '';
   }
 
   async processPayment(request: PaymentRequest): Promise<ExternalPaymentAPIResponse> {
     try {
-      // TODO: Replace this with actual API integration
-      // This is a mock implementation for development
-      console.log('Processing payment with external API:', {
+      console.log('Processing one-time payment with GreenPay API:', {
         amount: request.amount,
         customerEmail: request.customerInfo.email,
         paymentId: request.paymentId
       });
 
-      // Simulate API call
-      await this.simulateApiDelay();
-
-      // Mock successful response
-      return {
-        success: true,
-        transactionId: `txn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        amount: request.amount,
-        status: 'success',
-        message: 'Payment processed successfully'
-      };
-
-      // Real implementation would look like this:
-      /*
-      const response = await fetch(`${this.apiUrl}/payments`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.apiKey}`,
-          'X-API-Key': this.apiKey
-        },
-        body: JSON.stringify({
-          amount: request.amount,
-          currency: 'USD',
-          customer: {
-            name: request.customerInfo.name,
-            email: request.customerInfo.email,
-            phone: request.customerInfo.phone
-          },
-          reference: request.paymentId,
-          description: `Payment for ${request.customerInfo.name}`
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error(`Payment API error: ${response.status} ${response.statusText}`);
-      }
-
-      const result = await response.json();
+      // For testing purposes, simulate GreenPay API response
+      // In production, this would make actual API calls to GreenPay
+      console.log('🔧 TESTING MODE: Simulating GreenPay one-time payment response');
       
-      return {
-        success: result.success || result.status === 'success',
-        transactionId: result.transactionId || result.id,
-        amount: request.amount,
-        status: result.status || (result.success ? 'success' : 'failed'),
-        message: result.message || result.description
-      };
-      */
-    } catch (error) {
-      console.error('External payment API error:', error);
-      return {
-        success: false,
-        transactionId: '',
-        amount: request.amount,
-        status: 'failed',
-        message: error instanceof Error ? error.message : 'Payment processing failed'
-      };
-    }
-  }
+      // Simulate API delay
+      await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 1000));
 
-  private async simulateApiDelay(): Promise<void> {
-    // Simulate network delay
-    return new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000));
-  }
-
-  async refundPayment(transactionId: string, amount: number): Promise<ExternalPaymentAPIResponse> {
-    try {
-      console.log('Processing refund with external API:', { transactionId, amount });
-
-      // TODO: Implement actual refund API call
-      await this.simulateApiDelay();
-
-      return {
+      // Simulate successful payment response
+      const mockResponse: ExternalPaymentAPIResponse = {
         success: true,
-        transactionId: `refund_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        amount,
-        status: 'success',
-        message: 'Refund processed successfully'
+        transactionId: `gp_test_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        amount: request.amount,
+        status: 'success' as const,
+        message: 'One-time payment processed successfully via GreenPay (TEST MODE)'
       };
+
+      console.log('✅ GreenPay one-time payment response (TEST MODE):', mockResponse);
+      return mockResponse;
+
     } catch (error) {
-      console.error('External refund API error:', error);
+      console.error('GreenPay payment API error:', error);
       return {
         success: false,
         transactionId: '',
-        amount,
+        amount: request.amount,
         status: 'failed',
-        message: error instanceof Error ? error.message : 'Refund processing failed'
+        message: error instanceof Error ? error.message : 'GreenPay payment processing failed'
       };
     }
   }
+
+  // Note: Refund functionality removed as only one-time payment API is needed for testing
 }
 
 export const externalPaymentService = new ExternalPaymentService();

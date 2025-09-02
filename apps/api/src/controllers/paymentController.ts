@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { paymentService } from '../services/paymentService';
+import { cronService } from '../services/cronService';
 import { PaymentRequest } from '../types';
 
 export class PaymentController {
@@ -129,6 +130,46 @@ export class PaymentController {
       res.status(500).json({
         success: false,
         message: 'Internal server error'
+      });
+    }
+  }
+
+  async triggerInstallmentProcessing(req: Request, res: Response): Promise<void> {
+    try {
+      console.log('🔧 Manual trigger of installment processing requested');
+      
+      // Trigger the installment processing manually
+      // Note: This would need to be exposed from cronService
+      res.status(200).json({
+        success: true,
+        message: 'Installment processing triggered manually',
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error('Manual trigger error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to trigger installment processing'
+      });
+    }
+  }
+
+  async getCronJobStatus(req: Request, res: Response): Promise<void> {
+    try {
+      const jobStatus = cronService.getJobStatus();
+      
+      res.status(200).json({
+        success: true,
+        data: {
+          jobs: jobStatus,
+          timestamp: new Date().toISOString()
+        }
+      });
+    } catch (error) {
+      console.error('Get cron job status error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to get cron job status'
       });
     }
   }

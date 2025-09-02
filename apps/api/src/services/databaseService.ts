@@ -221,6 +221,26 @@ export class DatabaseService {
     });
   }
 
+  async updatePaymentStatus(id: string, status: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const stmt = this.db.prepare(`
+        UPDATE payments 
+        SET status = ?, updated_at = CURRENT_TIMESTAMP 
+        WHERE id = ?
+      `);
+
+      stmt.run([status, id], function(err) {
+        if (err) {
+          reject(err);
+        } else {
+          resolve();
+        }
+      });
+
+      stmt.finalize();
+    });
+  }
+
   close(): void {
     this.db.close();
   }
